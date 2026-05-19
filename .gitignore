@@ -1,0 +1,18 @@
+# History files
+.Rhistory
+.Rapp.history
+
+# Session Data files
+.RData
+.RData-tmp
+
+# User-specific files
+.Ruserdata
+
+# RStudio files
+.Rproj.user/
+
+# Keep plots and R/Markdown files, but optionally ignore raw CSV if it is too large
+# (uncomment the line below if you do not want to push the raw 15MB dataset to GitHub)
+# spotify_dataset.csv
+# spotify_tracks.csv
