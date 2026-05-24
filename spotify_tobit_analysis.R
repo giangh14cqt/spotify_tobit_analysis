@@ -10,7 +10,7 @@
 Sys.setenv(LANG = "en")
 options(scipen = 10)  # Avoid scientific notation in output
 
-required_packages <- c("AER", "stargazer", "ggplot2", "corrplot", "lmtest", "car", "sandwich")
+required_packages <- c("AER", "stargazer", "ggplot2", "corrplot", "lmtest", "car", "sandwich", "tseries")
 for (pkg in required_packages) {
   if (!require(pkg, character.only = TRUE, quietly = TRUE)) {
     cat("Package", pkg, "not found. Installing...\n")
@@ -104,7 +104,7 @@ dev.off()
 # We model popularity as a function of all acoustic features, controlling for key and time_signature factors.
 # Independent variables include factors: key, time_signature; and continuous: duration_min, explicit, danceability, energy, loudness, mode, speechiness, acousticness, instrumentalness, liveness, valence, tempo.
 
-formula_general <- popularity ~ duration_min + explicit + danceability + energy + as.factor(key) + 
+formula_general <- popularity ~ duration_min + explicit * danceability + energy + as.factor(key) + 
                                 loudness + mode + speechiness + acousticness + instrumentalness + 
                                 liveness + valence + tempo + as.factor(time_signature)
 
@@ -121,9 +121,9 @@ fit_tobit_gen <- tobit(formula_general, left = 0, data = df_clean)
 # However, when estimated via Tobit (correcting for censoring bias), 'liveness' becomes highly significant (p-value ~ 0.007).
 # We omit 'liveness' in the restricted Model 3 to formally show the consequence of incorrect variable selection based on biased OLS results.
 cat("Estimating Model 3: Specific Parsimonious Tobit Model (omitting liveness)...\n")
-formula_specific <- popularity ~ duration_min + explicit + danceability + energy + as.factor(key) + 
+formula_specific <- popularity ~ duration_min + explicit * danceability + energy + as.factor(key) + 
                                  loudness + mode + speechiness + acousticness + instrumentalness + 
-                                 valence + tempo + as.factor(time_signature)
+                                  valence + tempo + as.factor(time_signature)
 fit_tobit_spec <- tobit(formula_specific, left = 0, data = df_clean)
 
 # ------------------------------------------------------------------------------
@@ -151,34 +151,36 @@ cat("Specific Tobit Model: ", round(pseudo_r2_spec, 6), "\n")
 # The marginal effect on the unconditional expected value is: dE[y|x]/dx_j = beta_j * Phi(x*beta / sigma)
 # We evaluate the average scaling factor Phi(x_i*beta / sigma) across all observations to get Average Marginal Effects (AME).
 
-compute_tobit_marginal_effects <- function(model) {
-  X <- model.matrix(model)
-  beta <- coef(model)
-  scale_param <- model$scale
-  
-  # Calculate linear predictor index for each observation
-  index <- X %*% beta
-  
-  # Compute the probability of being uncensored (scaling factor) for each track
-  prob_uncensored <- pnorm(index / scale_param)
-  avg_prob_uncensored <- mean(prob_uncensored)
-  
-  # Marginal effects on E[y|x] (unconditional expected value)
-  marginal_effects <- beta * avg_prob_uncensored
-  
-  return(list(
-    avg_scale_factor = avg_prob_uncensored,
-    mfx = marginal_effects
-  ))
-}
+# Diagnostics: Normality of residuals
+res_tobit <- residuals(fit_tobit_spec)
+cat("\n=== Normality Test (Jarque-Bera) ===\n")
+print(jarque.bera.test(res_tobit))
 
-mfx_gen_results <- compute_tobit_marginal_effects(fit_tobit_gen)
-mfx_spec_results <- compute_tobit_marginal_effects(fit_tobit_spec)
 
-cat("\n=== Unconditional Average Marginal Effects (General Tobit) ===\n")
-cat("Average Unconditional Scaling Factor (Pr(y > 0)):", mfx_gen_results$avg_scale_factor, "\n")
-cat("Marginal Effects:\n")
-print(round(mfx_gen_results$mfx, 6))
+# Linktest for specification
+y_hat <- fitted(fit_tobit_spec)
+y_hat_sq <- y_hat^2
+linktest_model <- tobit(popularity ~ y_hat + y_hat_sq, left = 0, data = df_clean)
+cat("\n=== Linktest (y_hat_sq p-value) ===\n")
+print(summary(linktest_model)$coefficients["y_hat_sq", ])
+
+# Post-Estimation: 3 Kinds of Marginal Effects
+X_spec <- model.matrix(fit_tobit_spec)
+beta_spec <- coef(fit_tobit_spec)
+sigma_spec <- fit_tobit_spec$scale
+index_spec <- as.numeric(X_spec %*% beta_spec)
+
+pdf_val <- dnorm(index_spec / sigma_spec)
+cdf_val <- pnorm(index_spec / sigma_spec)
+
+me_latent <- beta_spec
+me_prob <- mean(pdf_val) * (beta_spec / sigma_spec)
+me_total <- beta_spec * mean(cdf_val)
+
+mfx_table <- cbind("Latent_Var" = me_latent, "Prob_y>0" = me_prob, "Expected_y" = me_total)
+
+cat("\n=== 3 Kinds of Average Marginal Effects (Specific Model) ===\n")
+print(round(mfx_table, 5))
 
 # ------------------------------------------------------------------------------
 # 5. Stargazer Regression Table Output
