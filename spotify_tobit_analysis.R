@@ -152,34 +152,34 @@ cat("Specific Tobit Model: ", round(pseudo_r2_spec, 6), "\n")
 # We evaluate the average scaling factor Phi(x_i*beta / sigma) across all observations to get Average Marginal Effects (AME).
 
 # Diagnostics: Normality of residuals
-res_tobit <- residuals(fit_tobit_spec)
+res_tobit <- residuals(fit_tobit_gen)
 cat("\n=== Normality Test (Jarque-Bera) ===\n")
 print(jarque.bera.test(res_tobit))
 
 
 # Linktest for specification
-y_hat <- fitted(fit_tobit_spec)
+y_hat <- fitted(fit_tobit_gen)
 y_hat_sq <- y_hat^2
 linktest_model <- tobit(popularity ~ y_hat + y_hat_sq, left = 0, data = df_clean)
 cat("\n=== Linktest (y_hat_sq p-value) ===\n")
 print(summary(linktest_model)$coefficients["y_hat_sq", ])
 
 # Post-Estimation: 3 Kinds of Marginal Effects
-X_spec <- model.matrix(fit_tobit_spec)
-beta_spec <- coef(fit_tobit_spec)
-sigma_spec <- fit_tobit_spec$scale
-index_spec <- as.numeric(X_spec %*% beta_spec)
+X_gen <- model.matrix(fit_tobit_gen)
+beta_gen <- coef(fit_tobit_gen)
+sigma_gen <- fit_tobit_gen$scale
+index_gen <- as.numeric(X_gen %*% beta_gen)
 
-pdf_val <- dnorm(index_spec / sigma_spec)
-cdf_val <- pnorm(index_spec / sigma_spec)
+pdf_val <- dnorm(index_gen / sigma_gen)
+cdf_val <- pnorm(index_gen / sigma_gen)
 
-me_latent <- beta_spec
-me_prob <- mean(pdf_val) * (beta_spec / sigma_spec)
-me_total <- beta_spec * mean(cdf_val)
+me_latent <- beta_gen
+me_prob <- mean(pdf_val) * (beta_gen / sigma_gen)
+me_total <- beta_gen * mean(cdf_val)
 
 mfx_table <- cbind("Latent_Var" = me_latent, "Prob_y>0" = me_prob, "Expected_y" = me_total)
 
-cat("\n=== 3 Kinds of Average Marginal Effects (Specific Model) ===\n")
+cat("\n=== 3 Kinds of Average Marginal Effects (General Model) ===\n")
 print(round(mfx_table, 5))
 
 # ------------------------------------------------------------------------------
