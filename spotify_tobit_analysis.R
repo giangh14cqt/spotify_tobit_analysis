@@ -189,7 +189,7 @@ cat("\n=== Generating Regression Table (Text Mode) ===\n")
 stargazer(fit_ols_gen, fit_tobit_gen, fit_tobit_spec, 
           type = "text",
           title = "Popularity Regression Results: OLS vs. Tobit Models",
-          column.labels = c("OLS Baseline", "General Tobit", "Specific Tobit"),
+          column.labels = c("OLS Baseline", "General Tobit", "Restricted Tobit"),
           dep.var.labels = "Popularity Metric",
           omit.stat = c("f", "ser"),
           add.lines = list(
