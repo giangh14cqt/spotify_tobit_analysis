@@ -98,6 +98,21 @@ corrplot(cor_matrix, method = "color", type = "upper", order = "hclust",
          mar = c(0, 0, 2, 0))
 dev.off()
 
+# --- Generate Summary Statistics Table ---
+cat("\n=== Summary Statistics ===\n")
+# We select only the numeric variables for the summary table
+vars_for_summary <- df_clean[, c("popularity", "duration_min", "danceability", 
+                                 "energy", "loudness", "speechiness", 
+                                 "acousticness", "instrumentalness", 
+                                 "valence", "tempo", "explicit")]
+
+# Use stargazer to create the summary table
+stargazer(vars_for_summary, 
+          type = "text", 
+          summary = TRUE, 
+          title = "Table 1: Descriptive Statistics of Spotify Tracks",
+          digits = 3)
+
 # ------------------------------------------------------------------------------
 # 3. Model Estimation (General-to-Specific)
 # ------------------------------------------------------------------------------
@@ -205,4 +220,60 @@ stargazer(fit_ols_gen, fit_tobit_gen, fit_tobit_spec,
 
 cat("\nRegression table can be generated in LaTeX format for reports using:\n")
 cat("stargazer(fit_ols_gen, fit_tobit_gen, fit_tobit_spec, type = 'latex', ...)\n")
-cat("\n--- Script Completed Successfully ---\n")
+
+# ------------------------------------------------------------------------------
+# 6. Robustness Checks & Sub-Sample Analysis
+# ------------------------------------------------------------------------------
+
+# --- A. Sub-Sample Analysis: Explicit vs. Non-Explicit Tracks ---
+cat("\n=== Estimating Sub-Sample Tobit Models ===\n")
+
+# Split the dataset
+df_explicit <- subset(df_clean, explicit == 1)
+df_clean_pop <- subset(df_clean, explicit == 0)
+
+# We use the specific formula but drop the 'explicit' variable since it is now constant
+formula_sub <- popularity ~ duration_min + danceability + energy + as.factor(key) + 
+  loudness + mode + speechiness + acousticness + instrumentalness + 
+  valence + tempo + as.factor(time_signature)
+
+# Estimate Tobit for both subsets
+fit_tobit_explicit <- tobit(formula_sub, left = 0, data = df_explicit)
+fit_tobit_clean <- tobit(formula_sub, left = 0, data = df_clean_pop)
+
+# Generate Stargazer table for the sub-samples
+cat("\n=== Sub-Sample Regression Table ===\n")
+stargazer(fit_tobit_explicit, fit_tobit_clean, 
+          type = "text",
+          title = "Tobit Sub-Sample Analysis: Explicit vs. Clean Tracks",
+          column.labels = c("Explicit Tracks", "Clean Tracks"),
+          dep.var.labels = "Popularity Metric",
+          omit.stat = c("f", "ser"))
+
+
+# --- B. Heteroskedasticity Diagnostics ---
+cat("\n=== Generating Heteroskedasticity Diagnostic Plot ===\n")
+
+# Extract fitted values and residuals from the General Tobit model
+tobit_fitted <- fitted(fit_tobit_gen)
+tobit_res <- residuals(fit_tobit_gen)
+
+# Plot Residuals vs Fitted values
+p_het <- ggplot(data.frame(Fitted = tobit_fitted, Residuals = tobit_res), aes(x = Fitted, y = Residuals)) +
+  geom_point(alpha = 0.3, color = "#1DB954") +
+  geom_hline(yintercept = 0, color = "#FF0000", linetype = "dashed", size = 1) +
+  labs(title = "Tobit Residuals vs. Fitted Values",
+       subtitle = "Visual Diagnostic for Heteroskedasticity",
+       x = "Fitted Values (Latent Expected Popularity)",
+       y = "Tobit Residuals",
+       caption = "Fanning or cone-shapes indicate potential heteroskedasticity") +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
+    plot.subtitle = element_text(size = 12, hjust = 0.5),
+    panel.grid.major = element_line(color = "#EBEBEB")
+  )
+
+# Save the plot
+ggsave("heteroskedasticity_plot.png", plot = p_het, width = 8, height = 5, dpi = 300)
+cat("Heteroskedasticity plot saved to 'heteroskedasticity_plot.png'.\n")
